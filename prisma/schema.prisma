@@ -1,0 +1,29 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Country {
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  capital           String?
+  region            String?
+  population        Int
+  currency_code     String?
+  exchange_rate     Float?
+  estimated_gdp     Float?
+  flag_url          String?
+  last_refreshed_at DateTime @default(now())
+
+  @@index([region])
+  @@index([currency_code])
+  @@index([estimated_gdp])
+  @@index([last_refreshed_at])
+}

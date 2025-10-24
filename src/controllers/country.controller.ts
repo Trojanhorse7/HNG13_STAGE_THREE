@@ -1,0 +1,191 @@
+import { Request, Response } from 'express';
+import prisma from '../prisma';
+import {
+    fetchCountries,
+    fetchExchangeRates,
+    generateSummaryImage,
+} from '../utils/country.utils';
+import fs from 'fs';
+import path from 'path';
+
+// Controller to refresh countries data
+export const refreshCountries = async (req: Request, res: Response) => {
+    try {
+        // Fetch countries
+        const countriesData = await fetchCountries();
+        if (!countriesData) {
+            return res.status(503).json({
+                error: 'External data source unavailable',
+                details:
+                    'Could not fetch data from https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies',
+            });
+        }
+
+        // Fetch exchange rates
+        const exchangeRates = await fetchExchangeRates();
+        if (!exchangeRates) {
+            return res.status(503).json({
+                error: 'External data source unavailable',
+                details:
+                    'Could not fetch data from https://open.er-api.com/v6/latest/USD',
+            });
+        }
+
+        const now = new Date();
+
+        // Process and store countries
+        const countriesToUpsert = countriesData.map((country: any) => {
+            const currencyCode =
+                country.currencies && country.currencies.length > 0
+                    ? country.currencies[0].code
+                    : null;
+            const exchangeRate =
+                currencyCode && exchangeRates[currencyCode]
+                    ? exchangeRates[currencyCode]
+                    : null;
+            const randomMultiplier = Math.random() * 1000 + 1000; // 1000-2000
+            const estimatedGdp = exchangeRate
+                ? (country.population * randomMultiplier) / exchangeRate
+                : currencyCode
+                    ? null
+                    : 0;
+
+            return {
+                name: country.name,
+                capital: country.capital || null,
+                region: country.region || null,
+                population: country.population,
+                currency_code: currencyCode,
+                exchange_rate: exchangeRate,
+                estimated_gdp: estimatedGdp,
+                flag_url: country.flag || null,
+                last_refreshed_at: now,
+            };
+        });
+
+        // Upsert countries
+        for (const country of countriesToUpsert) {
+            await prisma.country.upsert({
+                where: { name: country.name },
+                update: country,
+                create: country,
+            });
+        }
+
+        // Generate summary image
+        const totalCountries = await prisma.country.count();
+        const top5Gdp = await prisma.country.findMany({
+            orderBy: { estimated_gdp: 'desc' },
+            take: 5,
+            select: { name: true, estimated_gdp: true },
+        });
+
+        await generateSummaryImage(totalCountries, top5Gdp, now);
+
+        res.json({ message: 'Countries refreshed successfully' });
+    } catch (error) {
+        console.error('Refresh error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Controller to get list of countries with filters that are optional
+export const getCountries = async (req: Request, res: Response) => {
+    try {
+        const { region, currency, sort } = req.query;
+
+        const where: any = {};
+        if (region) where.region = { equals: region };
+        if (currency) where.currency_code = { equals: currency };
+
+        let orderBy: any = { name: 'asc' };
+        if (sort === 'gdp_desc') orderBy.push({ estimated_gdp: 'desc' });
+        if (sort === 'gdp_asc') orderBy.push({ estimated_gdp: 'asc' });
+
+        // Default sorting by name
+        if (!orderBy.length) orderBy.push({ name: 'asc' });
+
+        const countries = await prisma.country.findMany({
+            where,
+            orderBy,
+        });
+
+        res.json(countries);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Controller to get a single country by name
+export const getCountry = async (req: Request, res: Response) => {
+    try {
+        const { name } = req.params;
+        const country = await prisma.country.findUnique({
+            where: { name },
+        });
+
+        if (!country) {
+            return res.status(404).json({ error: 'Country not found' });
+        }
+
+        res.json(country);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Controller to delete a country by name
+export const deleteCountry = async (req: Request, res: Response) => {
+    try {
+        const { name } = req.params;
+        const countries = await prisma.$queryRaw<
+            Array<{ id: number; name: string }>
+        >`
+        SELECT id, name FROM Country WHERE LOWER(name) = LOWER(${name}) LIMIT 1
+        `;
+
+        if (countries.length === 0) {
+            return res.status(404).json({ error: 'Country not found' });
+        }
+
+        const country = countries[0];
+        await prisma.country.delete({ where: { name: country.name } });
+        res.status(204).send();
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Controller to get status of countries data
+export const getStatus = async (req: Request, res: Response) => {
+    try {
+        const totalCountries = await prisma.country.count();
+        const last = await prisma.country.findFirst({
+            orderBy: { last_refreshed_at: 'desc' },
+            select: { last_refreshed_at: true },
+        });
+
+        return res.json({
+            total_countries: totalCountries,
+            last_refreshed_at: last
+                ? last.last_refreshed_at.toISOString()
+                : null,
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+// Controller to get summary image
+export const getImage = async (req: Request, res: Response) => {
+    try {
+        const imagePath = path.join(__dirname, '../../cache/summary.png');
+        if (!fs.existsSync(imagePath)) {
+            return res.status(404).json({ error: 'Summary image not found' });
+        }
+
+        res.sendFile(imagePath);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
