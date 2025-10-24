@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import fs from 'fs/promises';
 import path from 'path';
 
-const IMAGE_PATH = path.join(__dirname, '../../cache/summary.png');
+const IMAGE_PATH = path.join(process.cwd(), 'cache', 'summary.png');
 const WIDTH = 1200;
 const HEIGHT = 600;
 

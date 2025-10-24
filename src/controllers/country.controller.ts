@@ -201,7 +201,7 @@ export const getStatus = async (req: Request, res: Response) => {
 // Controller to get summary image
 export const getImage = async (req: Request, res: Response) => {
     try {
-        const imagePath = path.join(__dirname, '../../cache/summary.png');
+        const imagePath = path.join(process.cwd(), 'cache', 'summary.png');
         if (!fs.existsSync(imagePath)) {
             return res.status(404).json({ error: 'Summary image not found' });
         }

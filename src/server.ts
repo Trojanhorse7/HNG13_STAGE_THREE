@@ -2,8 +2,10 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import prisma from './prisma';
+import fs from 'fs/promises';
+import path from 'path';
 
-// ROUTES IMPORTS
+//ROUTES IMPORTS
 import countryRoutes from './routes/country.routes';
 
 // EXPRESS APP SETUP
@@ -26,6 +28,11 @@ app.use((req: Request, res: Response) => {
 // START SERVER
 async function startServer() {
     try {
+        // Ensure cache directory exists
+        const cacheDir = path.join(process.cwd(), 'cache');
+        await fs.mkdir(cacheDir, { recursive: true });
+        console.log('✅ Cache directory ready');
+
         await prisma.$connect();
         console.log('✅ Database connected');
 
@@ -33,7 +40,7 @@ async function startServer() {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
         });
     } catch (error) {
-        console.error('❌ Database connection failed:', error);
+        console.error('❌ Startup failed:', error);
         process.exit(1);
     }
 }
