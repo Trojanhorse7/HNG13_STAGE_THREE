@@ -1,14 +1,22 @@
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import prisma from '../prisma';
-import {
-    fetchCountries,
-    fetchExchangeRates,
-    generateSummaryImage,
-} from '../utils/country.utils';
+import { fetchCountries, fetchExchangeRates, generateSummaryImage } from '../utils/country.utils';
 import fs from 'fs';
 import path from 'path';
 
-// Controller to refresh countries data
+// Validation schema for processed country data
+const processedCountrySchema = z.object({
+    name: z.string().min(1),
+    population: z.number().int().positive(),
+    currency_code: z.string().nullable(),
+    capital: z.string().nullable(),
+    region: z.string().nullable(),
+    exchange_rate: z.number().positive().nullable(),
+    estimated_gdp: z.number().nullable(),
+    flag_url: z.string().nullable(),
+});
+
 export const refreshCountries = async (req: Request, res: Response) => {
     try {
         // Fetch countries
@@ -33,35 +41,49 @@ export const refreshCountries = async (req: Request, res: Response) => {
 
         const now = new Date();
 
-        // Process and store countries
-        const countriesToUpsert = countriesData.map((country: any) => {
-            const currencyCode =
-                country.currencies && country.currencies.length > 0
-                    ? country.currencies[0].code
-                    : null;
-            const exchangeRate =
-                currencyCode && exchangeRates[currencyCode]
-                    ? exchangeRates[currencyCode]
-                    : null;
-            const randomMultiplier = Math.random() * 1000 + 1000; // 1000-2000
-            const estimatedGdp = exchangeRate
-                ? (country.population * randomMultiplier) / exchangeRate
-                : currencyCode
-                    ? null
-                    : 0;
+        // Process and validate countries
+        const countriesToUpsert = [];
+        for (const country of countriesData) {
+            try {
+                const currencyCode = country.currencies && country.currencies.length > 0 ? country.currencies[0].code : null;
+                const exchangeRate = currencyCode && exchangeRates[currencyCode] ? exchangeRates[currencyCode] : null;
+                const randomMultiplier = Math.random() * 1000 + 1000; // 1000-2000
+                const estimatedGdp = exchangeRate ? (country.population * randomMultiplier) / exchangeRate : (currencyCode ? null : 0);
 
-            return {
-                name: country.name,
-                capital: country.capital || null,
-                region: country.region || null,
-                population: country.population,
-                currency_code: currencyCode,
-                exchange_rate: exchangeRate,
-                estimated_gdp: estimatedGdp,
-                flag_url: country.flag || null,
-                last_refreshed_at: now,
-            };
-        });
+                const processedCountry = {
+                    name: country.name,
+                    capital: country.capital || null,
+                    region: country.region || null,
+                    population: country.population,
+                    currency_code: currencyCode,
+                    exchange_rate: exchangeRate,
+                    estimated_gdp: estimatedGdp,
+                    flag_url: country.flag || null,
+                };
+
+                // Validate the processed data
+                processedCountrySchema.parse(processedCountry);
+                countriesToUpsert.push({
+                    ...processedCountry,
+                    last_refreshed_at: now,
+                });
+            } catch (validationError) {
+                if (validationError instanceof z.ZodError) {
+                    const details: Record<string, string> = {};
+                    validationError.errors.forEach((err: any) => {
+                        const field = err.path[0] as string;
+                        details[field] = err.message;
+                    });
+
+                    return res.status(400).json({
+                        error: 'Validation failed for country data',
+                        country: country.name,
+                        details,
+                    });
+                }
+                throw validationError;
+            }
+        }
 
         // Upsert countries
         for (const country of countriesToUpsert) {
