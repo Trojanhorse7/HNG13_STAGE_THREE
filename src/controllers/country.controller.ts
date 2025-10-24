@@ -8,7 +8,7 @@ import path from 'path';
 // Validation schema for processed country data
 const processedCountrySchema = z.object({
     name: z.string().min(1),
-    population: z.number().int().positive(),
+    population: z.number().int().nonnegative(),
     currency_code: z.string().nullable(),
     capital: z.string().nullable(),
     region: z.string().nullable(),
