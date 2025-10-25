@@ -69,9 +69,9 @@ export const generateSummaryImage = async (
     const svg = `
     <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">
         <style>
-        .title { font-family: Arial, Helvetica, sans-serif; font-size: 36px; font-weight: bold; fill: #222; }
-        .meta { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #444; }
-        .list { font-family: Arial, Helvetica, sans-serif; font-size: 22px; fill: #111; }
+        .title { font-family: sans-serif; font-size: 36px; font-weight: bold; fill: #222; }
+        .meta { font-family: sans-serif; font-size: 18px; fill: #444; }
+        .list { font-family: sans-serif; font-size: 22px; fill: #111; }
         rect { fill: #f7f7f8; }
         </style>
         <rect width="100%" height="100%" rx="12" />
