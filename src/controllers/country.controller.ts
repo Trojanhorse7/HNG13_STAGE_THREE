@@ -204,16 +204,16 @@ export const getStatus = async (req: Request, res: Response) => {
 // Controller to get summary image
 export const getImage = async (req: Request, res: Response) => {
     try {
-        // Check cache directory first
-        const cacheImagePath = path.join(process.cwd(), 'cache', 'summary.png');
-        if (fs.existsSync(cacheImagePath)) {
-            return res.sendFile(cacheImagePath);
-        }
-
-        // Check /tmp as fallback
+        // Check /tmp first (newer images in read-only environments), then cache
         const tmpImagePath = path.join('/tmp', 'country-api-summary.png');
         if (fs.existsSync(tmpImagePath)) {
             return res.sendFile(tmpImagePath);
+        }
+
+        // Check cache directory as fallback
+        const cacheImagePath = path.join(process.cwd(), 'cache', 'summary.png');
+        if (fs.existsSync(cacheImagePath)) {
+            return res.sendFile(cacheImagePath);
         }
 
         res.status(404).json({ error: 'Summary image not found' });
