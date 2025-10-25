@@ -39,8 +39,6 @@ export const refreshCountries = async (req: Request, res: Response) => {
             });
         }
 
-        console.log("Fetched countries and exchange rates.");
-
         const now = new Date();
 
         // Process and validate countries
@@ -87,15 +85,11 @@ export const refreshCountries = async (req: Request, res: Response) => {
             }
         }
 
-        console.log("Processed and validated country data.");
-
         // Bulk replace all data in one transaction
         await prisma.$transaction([
             prisma.country.deleteMany(),
             prisma.country.createMany({ data: countriesToUpsert }), 
         ]);
-
-        console.log("Countries data refreshed successfully.");
 
         // Generate summary image
         const totalCountries = await prisma.country.count();
@@ -107,8 +101,6 @@ export const refreshCountries = async (req: Request, res: Response) => {
             take: 5,
             select: { name: true, estimated_gdp: true },
         });
-
-        console.log("Generating summary image...");
 
         await generateSummaryImage(totalCountries, top5Gdp, now);
 
@@ -212,12 +204,19 @@ export const getStatus = async (req: Request, res: Response) => {
 // Controller to get summary image
 export const getImage = async (req: Request, res: Response) => {
     try {
-        const imagePath = path.join(process.cwd(), 'cache', 'summary.png');
-        if (!fs.existsSync(imagePath)) {
-            return res.status(404).json({ error: 'Summary image not found' });
+        // Check cache directory first
+        const cacheImagePath = path.join(process.cwd(), 'cache', 'summary.png');
+        if (fs.existsSync(cacheImagePath)) {
+            return res.sendFile(cacheImagePath);
         }
 
-        res.sendFile(imagePath);
+        // Check /tmp as fallback
+        const tmpImagePath = path.join('/tmp', 'country-api-summary.png');
+        if (fs.existsSync(tmpImagePath)) {
+            return res.sendFile(tmpImagePath);
+        }
+
+        res.status(404).json({ error: 'Summary image not found' });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
