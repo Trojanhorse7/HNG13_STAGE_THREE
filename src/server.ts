@@ -28,11 +28,6 @@ app.use((req: Request, res: Response) => {
 // START SERVER
 async function startServer() {
     try {
-        // Ensure cache directory exists
-        const cacheDir = path.join(process.cwd(), 'cache');
-        await fs.mkdir(cacheDir, { recursive: true });
-        console.log('✅ Cache directory ready');
-
         await prisma.$connect();
         console.log('✅ Database connected');
 
