@@ -39,6 +39,8 @@ export const refreshCountries = async (req: Request, res: Response) => {
             });
         }
 
+        console.log("Fetched countries and exchange rates.");
+
         const now = new Date();
 
         // Process and validate countries
@@ -85,11 +87,15 @@ export const refreshCountries = async (req: Request, res: Response) => {
             }
         }
 
+        console.log("Processed and validated country data.");
+
         // Bulk replace all data in one transaction
         await prisma.$transaction([
             prisma.country.deleteMany(),
             prisma.country.createMany({ data: countriesToUpsert }), 
         ]);
+
+        console.log("Countries data refreshed successfully.");
 
         // Generate summary image
         const totalCountries = await prisma.country.count();
@@ -101,6 +107,8 @@ export const refreshCountries = async (req: Request, res: Response) => {
             take: 5,
             select: { name: true, estimated_gdp: true },
         });
+
+        console.log("Generating summary image...");
 
         await generateSummaryImage(totalCountries, top5Gdp, now);
 
