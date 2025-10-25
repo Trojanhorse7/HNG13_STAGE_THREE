@@ -114,6 +114,7 @@ export const refreshCountries = async (req: Request, res: Response) => {
 
         res.json({ message: 'Countries refreshed successfully' });
     } catch (error) {
+        console.error('Error refreshing countries:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
