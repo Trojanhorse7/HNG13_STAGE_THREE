@@ -85,18 +85,18 @@ export const refreshCountries = async (req: Request, res: Response) => {
             }
         }
 
-        // Upsert countries
-        for (const country of countriesToUpsert) {
-            await prisma.country.upsert({
-                where: { name: country.name },
-                update: country,
-                create: country,
-            });
-        }
+        // Bulk replace all data in one transaction
+        await prisma.$transaction([
+            prisma.country.deleteMany(),
+            prisma.country.createMany({ data: countriesToUpsert }), 
+        ]);
 
         // Generate summary image
         const totalCountries = await prisma.country.count();
         const top5Gdp = await prisma.country.findMany({
+            where: {
+                estimated_gdp: { not: null }
+            },
             orderBy: { estimated_gdp: 'desc' },
             take: 5,
             select: { name: true, estimated_gdp: true },
@@ -106,7 +106,6 @@ export const refreshCountries = async (req: Request, res: Response) => {
 
         res.json({ message: 'Countries refreshed successfully' });
     } catch (error) {
-        console.error('Refresh error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 };
@@ -120,12 +119,13 @@ export const getCountries = async (req: Request, res: Response) => {
         if (region) where.region = { equals: region };
         if (currency) where.currency_code = { equals: currency };
 
-        let orderBy: any = { name: 'asc' };
+        let orderBy: any[] = [];
+
         if (sort === 'gdp_desc') orderBy.push({ estimated_gdp: 'desc' });
         if (sort === 'gdp_asc') orderBy.push({ estimated_gdp: 'asc' });
 
         // Default sorting by name
-        if (!orderBy.length) orderBy.push({ name: 'asc' });
+        if (orderBy.length === 0) orderBy.push({ name: 'asc' });
 
         const countries = await prisma.country.findMany({
             where,
@@ -142,15 +142,17 @@ export const getCountries = async (req: Request, res: Response) => {
 export const getCountry = async (req: Request, res: Response) => {
     try {
         const { name } = req.params;
-        const country = await prisma.country.findUnique({
-            where: { name },
-        });
+        const countries = await prisma.$queryRaw<
+            Array<{ id: number; name: string; capital: string | null; region: string | null; population: number; currency_code: string | null; exchange_rate: number | null; estimated_gdp: number | null; flag_url: string | null; last_refreshed_at: Date }>
+        >`
+        SELECT * FROM Country WHERE LOWER(name) = LOWER(${name}) LIMIT 1
+        `;
 
-        if (!country) {
+        if (countries.length === 0) {
             return res.status(404).json({ error: 'Country not found' });
         }
 
-        res.json(country);
+        res.json(countries[0]);
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }

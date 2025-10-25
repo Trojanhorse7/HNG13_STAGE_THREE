@@ -16,6 +16,9 @@ router.post('/countries/refresh', refreshCountries);
 // GET /countries
 router.get('/countries', getCountries);
 
+// GET /countries/image
+router.get('/countries/image', getImage);
+
 // GET /countries/:name
 router.get('/countries/:name', getCountry);
 
@@ -24,8 +27,5 @@ router.delete('/countries/:name', deleteCountry);
 
 // GET /status
 router.get('/status', getStatus);
-
-// GET /countries/image
-router.get('/countries/image', getImage);
 
 export default router;
